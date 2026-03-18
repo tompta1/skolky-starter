@@ -137,36 +137,17 @@ export default function App() {
                   {/* Primary name */}
                   <div className="item-name" title={name}>{name}</div>
 
-                  {/* Type + municipality */}
-                  <div className="item-meta">
-                    <span className="item-kind">{kindLabel(s.school_kind_code)}</span>
-                    {s.municipality && <span className="sep">·</span>}
-                    {s.municipality && <span>{s.municipality}</span>}
-                  </div>
-
                   {/* Address */}
                   {s.address && (
                     <div className="item-addr">{s.address}</div>
                   )}
 
-                  {/* Data-box + website + email row */}
+                  {/* Data-box + email row */}
                   <div className="item-chips">
                     {s.data_box_id && (
                       <span className="tag tag-ds" title="Datová schránka">
                         📦 {s.data_box_id}
                       </span>
-                    )}
-                    {s.website && (
-                      <a
-                        className="tag tag-web"
-                        href={s.website}
-                        target="_blank"
-                        rel="noreferrer"
-                        onClick={e => e.stopPropagation()}
-                        title={s.website}
-                      >
-                        🌐 {s.website.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '').substring(0, 28)}
-                      </a>
                     )}
                     {s.email && (
                       <a
@@ -179,6 +160,20 @@ export default function App() {
                       </a>
                     )}
                   </div>
+
+                  {/* Website — last row */}
+                  {s.website && (
+                    <a
+                      className="tag tag-web"
+                      href={s.website}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={e => e.stopPropagation()}
+                      title={s.website}
+                    >
+                      🌐 {s.website.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '').substring(0, 36)}
+                    </a>
+                  )}
                 </div>
               </li>
             )
