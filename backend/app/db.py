@@ -51,6 +51,8 @@ create table if not exists school_places (
     founder_type_code text,
     source_year integer,
     raw_source jsonb,
+    email text,
+    phone text,
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now()
 );
@@ -91,6 +93,8 @@ insert into school_places (
     founder_type_code,
     source_year,
     raw_source,
+    email,
+    phone,
     updated_at
 )
 values (
@@ -122,6 +126,8 @@ values (
     %(founder_type_code)s,
     %(source_year)s,
     %(raw_source)s,
+    %(email)s,
+    %(phone)s,
     now()
 )
 on conflict (external_key)
@@ -152,6 +158,8 @@ do update set
     founder_type_code = excluded.founder_type_code,
     source_year = excluded.source_year,
     raw_source = excluded.raw_source,
+    email = excluded.email,
+    phone = excluded.phone,
     updated_at = now();
 """
 

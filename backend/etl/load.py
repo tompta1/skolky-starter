@@ -115,6 +115,7 @@ def load_school_registry(path: Path) -> list[dict[str, Any]]:
         entity_name = entity.get("uplnyNazev") or entity.get("zkracenyNazev")
         legal_form_code = str(entity.get("pravniForma") or "").strip() or None
         founder_type_code = str(entity.get("typZrizovatele") or "").strip() or None
+        entity_email = (entity.get("emaily") or [None])[0]
         for school in entity.get("skolyAZarizeni") or []:
             if not isinstance(school, dict):
                 continue
@@ -166,6 +167,8 @@ def load_school_registry(path: Path) -> list[dict[str, Any]]:
                     "data_box_type": None,
                     "data_box_subtype": None,
                     "data_box_name": None,
+                    "email": entity_email,
+                    "phone": None,
                 }
                 records.append(record)
     print(f"Parsed {len(records)} school workplaces from school registry")

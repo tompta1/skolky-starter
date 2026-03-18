@@ -35,6 +35,7 @@ export type MapSchool = {
   municipality: string | null
   data_box_id: string | null
   website: string | null
+  email?: string | null
   address: string
 }
 

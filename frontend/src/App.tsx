@@ -149,7 +149,7 @@ export default function App() {
                     <div className="item-addr">{s.address}</div>
                   )}
 
-                  {/* Data-box + website row */}
+                  {/* Data-box + website + email row */}
                   <div className="item-chips">
                     {s.data_box_id && (
                       <span className="tag tag-ds" title="Datová schránka">
@@ -166,6 +166,16 @@ export default function App() {
                         title={s.website}
                       >
                         🌐 {s.website.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '').substring(0, 28)}
+                      </a>
+                    )}
+                    {s.email && (
+                      <a
+                        className="tag tag-web"
+                        href={`mailto:${s.email}`}
+                        onClick={e => e.stopPropagation()}
+                        title={s.email}
+                      >
+                        ✉️ {s.email.substring(0, 32)}
                       </a>
                     )}
                   </div>

@@ -28,6 +28,11 @@ jobs:
         working-directory: backend
     steps:
       - uses: actions/checkout@v4
+      - uses: ariga/setup-atlas@v0
+      - run: atlas migrate apply --env local
+        working-directory: .
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'

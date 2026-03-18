@@ -85,6 +85,7 @@ def all_schools_for_map(
             municipality,
             data_box_id,
             website,
+            email,
             street,
             house_number,
             orientation_number,
