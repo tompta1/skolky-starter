@@ -1,5 +1,5 @@
 -- Initial schema: school_places table with all original columns.
-create table school_places (
+create table if not exists school_places (
     external_key text primary key,
     entity_ico text,
     red_izo text,
@@ -33,6 +33,6 @@ create table school_places (
     updated_at timestamptz not null default now()
 );
 
-create index ix_school_places_entity_ico on school_places(entity_ico);
-create index ix_school_places_address_point_code on school_places(address_point_code);
-create index ix_school_places_lat_lon on school_places(lat, lon);
+create index if not exists ix_school_places_entity_ico on school_places(entity_ico);
+create index if not exists ix_school_places_address_point_code on school_places(address_point_code);
+create index if not exists ix_school_places_lat_lon on school_places(lat, lon);
