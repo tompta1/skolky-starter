@@ -1,5 +1,13 @@
-import maplibregl from 'maplibre-gl'
+import maplibregl, { setWorkerUrl } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
+import workerUrl from 'maplibre-gl/dist/maplibre-gl-csp-worker?worker&url'
+
+// Vite production builds must be told the worker URL explicitly so that:
+//  (a) the worker script is emitted as a separate asset, and
+//  (b) the URL includes the correct base-path (e.g. /skolky-starter/ on GH Pages).
+// Without this, maplibre resolves the worker relative to the wrong path,
+// the worker fails to load, and you get "tt is not defined" at runtime.
+setWorkerUrl(workerUrl)
 import {
   forwardRef,
   useEffect,

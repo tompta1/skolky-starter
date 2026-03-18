@@ -5,6 +5,7 @@ export default defineConfig({
   base: process.env.BASE_PATH ?? '/',
   plugins: [react()],
   optimizeDeps: {
+    exclude: ['maplibre-gl'],
     esbuildOptions: { target: 'esnext' },
   },
   server: {
