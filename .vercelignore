@@ -1,0 +1,10 @@
+backend/bin/
+backend/lib/
+backend/lib64/
+backend/include/
+backend/share/
+backend/pyvenv.cfg
+backend/data/
+backend/__pycache__/
+backend/**/__pycache__/
+**/*.pyc
