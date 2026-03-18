@@ -1,164 +1,147 @@
-# Czech školky local-first starter
+# Seznam škol – interaktivní mapa škol a školských zařízení v ČR
 
-Minimal local prototype for:
+Interaktivní mapa všech škol a školských zařízení v České republice. Zobrazuje mateřské školy,
+základní školy, gymnázia, střední školy, základní umělecké školy, vyšší odborné školy, speciální
+školy, pedagogicko-psychologické poradny a další zařízení zapsaná v rejstříku MŠMT.
 
-- pulling official Czech datasets locally,
-- loading them into a Podman-hosted PostgreSQL database,
-- querying the 10 nearest kindergarten workplaces,
-- showing their websites and data-box IDs in a Vite + TypeScript frontend.
+**Živá aplikace:** [tompta1.github.io/skolky-starter](https://tompta1.github.io/skolky-starter/)
 
-## What this prototype does
+---
 
-1. Downloads three official source groups:
-   - MŠMT school registry JSON-LD for the whole Czech Republic
-   - data-box exports for PO and OVM
-   - RÚIAN monthly address-point CSV ZIP with coordinates
-2. Flattens kindergarten workplaces (`mistaVyuky`)
-3. Joins workplaces to address-point coordinates by `kodRUIAN`
-4. Joins workplaces to data-box IDs by `IČO`
-5. Stores the result in PostgreSQL
-6. Serves an API for nearby search
-7. Enriches missing school websites on demand from ARES when the nearby endpoint is called
+## Co aplikace umí
 
-## Architecture
+- Zobrazí **38 000+ školských pracovišť** na mapě celé České republiky
+- Filtruje podle druhu školy (mateřská, základní, gymnázium, střední, ZUŠ, VOŠ, …)
+- Ukazuje adresu, datovou schránku, e-mail a webové stránky každé školy
+- Při prohlížení automaticky dohledává webové stránky z registru ARES pro školy, které je dosud nemají
+- Přímé propojení e-mailem (`mailto:`) i odkazem na web
 
-- `compose.yaml` → local PostgreSQL with Podman
-- `backend/etl/load.py` → downloader + parser + loader
-- `backend/app/main.py` → FastAPI nearby endpoint
-- `frontend/` → Vite + React + TypeScript UI
+---
 
-## Prerequisites
+## Zdroje dat a aktuálnost
+
+| Datová sada | Zdroj | Aktualizace |
+|-------------|-------|-------------|
+| Rejstřík škol a školských zařízení | [MŠMT / LKOD](https://lkod-ftp.msmt.gov.cz/00022985/250d6b3f-71a2-4441-b8a0-4df141071f13/rssz-cela-cr-2026-01-01.jsonld) | Ročně (leden) |
+| Datové schránky PO | [Informační systém datových schránek](https://www.mojedatovaschranka.cz/sds/datafile?format=xml&service=seznam_ds_po) | Průběžně |
+| Datové schránky OVM | [ISDS](https://www.mojedatovaschranka.cz/sds/datafile?format=xml&service=seznam_ds_ovm) | Průběžně |
+| Adresní body (souřadnice) | [ČÚZK RÚIAN](https://atom.cuzk.gov.cz/RUIAN-CSV-ADR-ST/RUIAN-CSV-ADR-ST.xml) | Měsíčně |
+| Weby škol (doplnění) | [ARES REST API](https://ares.gov.cz/ekonomicke-subjekty-v-be/rest/ekonomicke-subjekty-rs/{ICO}) | Na vyžádání |
+
+Aktuální dataset byl načten **1. 1. 2026**. Pro aktualizaci spusťte `python -m etl.load refresh` (viz níže).
+
+---
+
+## Architektura
+
+```
+frontend/          Vite + React + TypeScript → GitHub Pages
+backend/app/       FastAPI REST API → Vercel (serverless)
+backend/etl/       ETL pipeline: stažení → parsování → uložení
+Neon PostgreSQL    Serverless Postgres (AWS eu-central-1)
+```
+
+- **`backend/etl/load.py`** — stáhne zdrojové soubory, přeloží souřadnice z JTSK → WGS84,
+  spojí rejstřík škol s adresními body a datovými schránkami, uloží do DB
+- **`backend/app/main.py`** — FastAPI: `/api/schools/map`, `/api/schools/nearby`, `/api/schools/enrich`
+- **`frontend/src/`** — React mapa (MapLibre GL), boční panel se seznamem, filtry podle druhu školy
+
+### API endpointy
+
+| Endpoint | Popis |
+|----------|-------|
+| `GET /api/schools/map` | Všechna pracoviště s koordináty (pro mapu) |
+| `GET /api/schools/nearby?lat=&lon=&limit=` | Nejbližší školy k danému bodu (Haversinova vzdálenost v SQL) |
+| `POST /api/schools/enrich` | Dohledá weby škol z ARES a uloží do DB |
+
+---
+
+## Lokální spuštění
+
+### Požadavky
 
 - Python 3.11+
 - Node 20+
-- Podman
-- Internet access during ETL and ARES enrichment
+- PostgreSQL 14+ (nebo Podman: `podman compose up -d db`)
 
-## 1. Start PostgreSQL with Podman
-
-```bash
-podman compose up -d db
-```
-
-The database starts on `localhost:5432` with:
-
-- database: `skolky`
-- user: `skolky`
-- password: `skolky`
-
-## 2. Start the backend
+### Backend
 
 ```bash
 cd backend
-cp .env.example .env
+cp .env.example .env          # nastavte DATABASE_URL
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-```
 
-Download and load everything:
-
-```bash
+# Stažení zdrojů a načtení do DB (trvá ~5 minut)
 python -m etl.load refresh
-```
 
-Start the API:
-
-```bash
+# Spuštění API
 uvicorn app.main:app --reload --port 8000
 ```
 
-Health check:
+Ověření: `curl http://localhost:8000/api/health`
 
-```bash
-curl http://localhost:8000/api/health
-```
-
-## 3. Start the frontend
+### Frontend
 
 ```bash
 cd frontend
 npm install
-npm run dev
+npm run dev        # http://localhost:5173
 ```
 
-Open:
+Pro lokální napojení na lokální backend přidejte do `frontend/.env.local`:
 
-```text
-http://localhost:5173
+```
+VITE_API_BASE=http://localhost:8000
 ```
 
-## How nearby search works
+### Testy
 
-The browser can provide your current location. The frontend then calls:
-
-```text
-GET /api/schools/nearby?lat=50.0755&lon=14.4378&limit=10
+```bash
+cd backend && bin/python -m pytest tests/ -v
+cd frontend && npm test
 ```
 
-The backend:
+---
 
-- computes Haversine distance in SQL,
-- returns the nearest 10 rows,
-- optionally fills missing websites from ARES for the returned IČO values.
+## Technické poznámky
 
-## Useful development notes
+### Souřadnicový systém
 
-### The first version intentionally stays minimal
+Zdrojová data RÚIAN jsou v S-JTSK (EPSG:5514). ETL pipeline převádí souřadnice do WGS84
+(EPSG:4326) pomocí `pyproj` — negace obou os kvůli konvenci ČÚZK (`-Y, -X`).
 
-It does **not** yet include:
+### Druhy škol
 
-- filtering to only `příspěvkové organizace`
-- deduplication by legal entity vs school vs branch beyond the current workplace flattening key
-- catchment-area logic
-- reverse website verification by scraping school pages
-- caching raw ARES payloads to disk
-- Vercel deployment packaging
-- map tiles or Leaflet/MapLibre UI
+Aplikace zobrazuje všechny druhy škol zapsané v rejstříku MŠMT. Gymnázia jsou v rejstříku
+vedena pod kódem `C00` (střední škola) — aplikace je detekuje podle názvu entity a zobrazuje je
+jako samostatnou kategorii. Vysoké školy nejsou součástí rejstříku MŠMT a v datech proto chybí.
 
-### Next upgrades I would add
+### ARES enrichment
 
-1. Add codebook ingestion for legal form and founder type.
-2. Materialize `legal_entities` and `school_units` tables separately.
-3. Add a filter for public / municipal / `příspěvková organizace` only.
-4. Add a local cache table for raw ARES website payloads.
-5. Add `pgvector` or PostGIS only if you later need richer geospatial features.
+Při každém posunu mapy aplikace na pozadí (po 2 s prodlevě) pošle až 20 viditelných škol bez
+webu na endpoint `/api/schools/enrich`. Ten zavolá ARES REST API pro příslušná IČO, výsledek
+uloží do DB a vrátí zpět do frontendu. Každá škola se kontroluje nejvýše jednou (dokud není
+zjištěn web nebo prázdný výsledek).
 
-## Source URLs currently wired into ETL
+### Datové schránky
 
-### School registry
+Datové schránky jsou párované přes IČO z exportů ISDS. Pro každou právnickou osobu je
+preferována datová schránka typu OVM (úřad veřejné moci) před PO (právnická osoba).
 
-```text
-https://lkod-ftp.msmt.gov.cz/00022985/250d6b3f-71a2-4441-b8a0-4df141071f13/rssz-cela-cr-2026-01-01.jsonld
-```
+### Změna URL rejstříku MŠMT
 
-### Data boxes
+URL rejstříku MŠMT je v `backend/etl/load.py` jako konstanta `SCHOOL_REGISTRY_URL`. MŠMT
+každoročně vydává nový export — při aktualizaci stačí změnit URL a znovu spustit ETL.
 
-```text
-https://www.mojedatovaschranka.cz/sds/datafile?format=xml&service=seznam_ds_po
-https://www.mojedatovaschranka.cz/sds/datafile?format=xml&service=seznam_ds_ovm
-```
-
-### RÚIAN Atom feed
-
-```text
-https://atom.cuzk.gov.cz/RUIAN-CSV-ADR-ST/RUIAN-CSV-ADR-ST.xml
-```
-
-### ARES endpoints used for website enrichment
-
-```text
-https://ares.gov.cz/ekonomicke-subjekty-v-be/rest/ekonomicke-subjekty-rs/{ICO}
-https://ares.gov.cz/ekonomicke-subjekty-v-be/rest/ekonomicke-subjekty/{ICO}
-```
+---
 
 ## Caveats
 
-- The school-registry URL is pinned to the 2026 whole-Czech export. If MŠMT republishes a new yearly export, update the constant.
-- The XML parser for data boxes is intentionally tolerant because the feed is large and namespace-heavy.
-- The RÚIAN CSV parser discovers columns by normalized header names. If ČÚZK changes headers, adjust the hints in `load.py`.
-- Website enrichment is best-effort. Some schools will still have no website returned.
-
-## Why this is already stronger than a flat paid export
-
-This design keeps **workplaces / branches** (`mistaVyuky`) as first-class records, which is usually the missing piece in many simple commercial spreadsheets. It also gives you a path to geospatial nearest-neighbour search instead of just static mailing lists.
+- **Weby škol:** obohacování z ARES je na principu best-effort; soukromé školy (s.r.o., a.s.)
+  mají výrazně vyšší pokrytí než příspěvkové organizace.
+- **Gymnázia:** záznamy v rejstříku nesou `school_kind_code = C00`; detekce podle `entity_name`
+  zachytí drtivou většinu, ale ne všechna gymnázia (záleží na přesném znění názvu).
+- **Koordináty:** menší část pracovišť nemá přiřazený adresní bod RÚIAN — tato pracoviště se
+  na mapě nezobrazí.
