@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import math
 import os
 from datetime import datetime, timezone
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Body, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from .ares import fetch_website_for_ico
@@ -41,6 +40,67 @@ def _distance_sql() -> str:
     """
 
 
+_GYM_EXPR = "school_kind_code = 'C00' and lower(entity_name) like 'gymnázium%%'"
+
+
+def _build_kind_filter(params: dict[str, Any], kinds: str | None) -> str:
+    """Build a WHERE clause fragment for the kinds filter.
+
+    'GYM' is a virtual code for gymnázia (stored as C00 but entity_name starts
+    with 'Gymnázium').  The 'C' code matches non-gymnázium C00 rows only.
+    All other codes match school_kind_code directly.
+    """
+    if not kinds:
+        return ""
+    kind_list = [k.strip() for k in kinds.split(",") if k.strip()]
+    if not kind_list:
+        return ""
+
+    include_gym = "GYM" in kind_list
+    real_kinds = [k for k in kind_list if k != "GYM"]
+
+    clauses: list[str] = []
+    if real_kinds:
+        params["kinds"] = real_kinds
+        if "C" in real_kinds and not include_gym:
+            # C requested without GYM: exclude gymnázia from C00 results
+            other_kinds = [k for k in real_kinds if k != "C"]
+            if other_kinds:
+                params["other_kinds"] = other_kinds
+                clauses.append(
+                    "(school_kind_code = any(%(other_kinds)s)"
+                    " or (school_kind_code = 'C00' and not (" + _GYM_EXPR + ")))"
+                )
+            else:
+                clauses.append("(school_kind_code = 'C00' and not (" + _GYM_EXPR + "))")
+        else:
+            clauses.append("school_kind_code = any(%(kinds)s)")
+    if include_gym:
+        clauses.append("(" + _GYM_EXPR + ")")
+
+    return "and (" + " or ".join(clauses) + ")" if clauses else ""
+
+
+def _gym_name_sql(entity_col: str = "entity_name") -> str:
+    """SQL expression: strip common legal suffixes from a gymnázium entity name."""
+    return f"""regexp_replace({entity_col},
+        '\\s*,?\\s*(příspěvková organizace|p\\.o\\.|s\\.r\\.o\\.|a\\.s\\.|o\\.p\\.s\\.)\\s*$',
+        '', 'gi')"""
+
+
+def _kind_code_sql() -> str:
+    """Virtual kind code: remap gymnázia to 'GYM'."""
+    return f"""case when {_GYM_EXPR} then 'GYM' else school_kind_code end"""
+
+
+def _name_sql() -> str:
+    """Display name: for gymnázia use entity_name (stripped), else school_name/entity_name."""
+    return f"""case
+        when {_GYM_EXPR} then {_gym_name_sql()}
+        else coalesce(school_name, entity_name)
+    end"""
+
+
 def _format_address(row: dict[str, Any]) -> str:
     return ", ".join(
         part
@@ -69,18 +129,15 @@ def all_schools_for_map(
 ) -> dict[str, Any]:
     """Lightweight endpoint for map display — returns all schools with coordinates."""
     params: dict[str, Any] = {}
-    kind_filter = ""
-    if kinds:
-        kind_list = [k.strip() for k in kinds.split(",") if k.strip()]
-        if kind_list:
-            kind_filter = "and school_kind_code = any(%(kinds)s)"
-            params["kinds"] = kind_list
+    kind_filter = _build_kind_filter(params, kinds)
 
+    name_sql = _name_sql()
+    kind_code_sql = _kind_code_sql()
     query = f"""
         select
             external_key,
-            coalesce(school_name, entity_name) as name,
-            school_kind_code,
+            {name_sql} as name,
+            {kind_code_sql} as school_kind_code,
             lat,
             lon,
             municipality,
@@ -122,13 +179,9 @@ def nearby_schools(
     distance_sql = _distance_sql()
 
     params: dict[str, Any] = {"lat": lat, "lon": lon, "limit": limit}
-    kind_filter = ""
-    if kinds:
-        kind_list = [k.strip() for k in kinds.split(",") if k.strip()]
-        if kind_list:
-            kind_filter = "and school_kind_code = any(%(kinds)s)"
-            params["kinds"] = kind_list
+    kind_filter = _build_kind_filter(params, kinds)
 
+    kind_code_sql = _kind_code_sql()
     query = f"""
         select
             external_key,
@@ -138,7 +191,7 @@ def nearby_schools(
             place_izo,
             entity_name,
             school_name,
-            school_kind_code,
+            {kind_code_sql} as school_kind_code,
             municipality,
             municipality_part,
             street,
@@ -148,6 +201,7 @@ def nearby_schools(
             lat,
             lon,
             website,
+            email,
             website_checked_at,
             data_box_id,
             data_box_type,
@@ -200,3 +254,57 @@ def nearby_schools(
             row["distance_km"] = round(row["distance_km"], 2)
 
     return {"items": rows, "count": len(rows)}
+
+
+@app.post("/api/schools/enrich")
+def enrich_schools(
+    external_keys: Annotated[list[str], Body()],
+) -> dict[str, Any]:
+    """ARES-enrich up to 20 schools that have no website yet. Persists results."""
+    keys = list(dict.fromkeys(external_keys))[:20]  # dedup, cap
+    if not keys:
+        return {"updates": {}}
+
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                select external_key, entity_ico
+                from school_places
+                where external_key = any(%(keys)s)
+                  and website is null
+                  and website_checked_at is null
+                  and entity_ico is not null
+                """,
+                {"keys": keys},
+            )
+            rows = cur.fetchall()
+
+        if not rows:
+            return {"updates": {}}
+
+        # group by ICO — one ARES call covers all schools sharing an entity
+        ico_to_keys: dict[str, list[str]] = {}
+        for row in rows:
+            ico_to_keys.setdefault(row["entity_ico"], []).append(row["external_key"])
+
+        updates: dict[str, str] = {}
+        for ico, school_keys in ico_to_keys.items():
+            website = fetch_website_for_ico(ico)
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    update school_places
+                    set website = coalesce(%s, website),
+                        website_checked_at = now(),
+                        updated_at = now()
+                    where entity_ico = %s
+                    """,
+                    (website, ico),
+                )
+            if website:
+                for key in school_keys:
+                    updates[key] = website
+        conn.commit()
+
+    return {"updates": updates}

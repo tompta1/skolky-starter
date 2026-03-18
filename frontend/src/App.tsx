@@ -1,22 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { fetchMapSchools } from './api'
+import { fetchEnrich, fetchMapSchools } from './api'
+import { filterSchools, type Bounds } from './filterUtils'
 import MapPane, { type MapHandle } from './MapPane'
 import {
   SCHOOL_KINDS,
   displayName,
   kindColor,
-  kindGroup,
   kindLabel,
   type MapSchool,
 } from './types'
-
-type Bounds = { w: number; s: number; e: number; n: number }
 
 export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
 
   const [activeKinds, setActiveKinds] = useState<Set<string>>(
-    new Set(['A00', 'B00', 'C', 'E00', 'F', 'J', 'K']),
+    new Set(SCHOOL_KINDS.filter(k => k.code !== '_').map(k => k.code)),
   )
 
   const [allSchools, setAllSchools] = useState<MapSchool[]>([])
@@ -28,23 +26,42 @@ export default function App() {
 
   const mapRef        = useRef<MapHandle>(null)
   const selectedElRef = useRef<HTMLLIElement | null>(null)
+  const enrichTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const enrichedKeysRef = useRef<Set<string>>(new Set())
 
   // ── Load all schools once ─────────────────────────────
   useEffect(() => {
     fetchMapSchools()
       .then(r => setAllSchools(r.items))
-      .catch(e => setMapError(e.message))
+      .catch(e => setMapError(e instanceof Error ? e.message : String(e)))
       .finally(() => setMapLoading(false))
   }, [])
 
   // ── Derive viewport list ──────────────────────────────
   const visibleSchools = useMemo<MapSchool[]>(() => {
     if (!bounds) return []
-    return allSchools.filter(s => {
-      if (s.lon < bounds.w || s.lon > bounds.e || s.lat < bounds.s || s.lat > bounds.n) return false
-      return activeKinds.has(kindGroup(s.school_kind_code))
-    })
+    return filterSchools(allSchools, bounds, activeKinds)
   }, [allSchools, bounds, activeKinds])
+
+  // ── ARES enrich visible schools without websites ──────
+  useEffect(() => {
+    if (enrichTimerRef.current) clearTimeout(enrichTimerRef.current)
+    enrichTimerRef.current = setTimeout(() => {
+      const candidates = visibleSchools
+        .filter(s => !s.website && !enrichedKeysRef.current.has(s.external_key))
+        .slice(0, 20)
+        .map(s => s.external_key)
+      if (candidates.length === 0) return
+      candidates.forEach(k => enrichedKeysRef.current.add(k))
+      fetchEnrich(candidates).then(updates => {
+        if (Object.keys(updates).length === 0) return
+        setAllSchools(prev =>
+          prev.map(s => (updates[s.external_key] ? { ...s, website: updates[s.external_key] } : s)),
+        )
+      }).catch(() => {})
+    }, 2000)
+    return () => { if (enrichTimerRef.current) clearTimeout(enrichTimerRef.current) }
+  }, [visibleSchools])
 
   const listSchools = useMemo<MapSchool[]>(() => {
     return [...visibleSchools].sort((a, b) =>
@@ -156,7 +173,7 @@ export default function App() {
                         onClick={e => e.stopPropagation()}
                         title={s.email}
                       >
-                        ✉️ {s.email.substring(0, 32)}
+                        ✉️ {s.email}
                       </a>
                     )}
                   </div>

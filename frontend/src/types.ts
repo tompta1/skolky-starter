@@ -16,6 +16,7 @@ export type School = {
   lat: number | null
   lon: number | null
   website: string | null
+  email?: string | null
   website_checked_at: string | null
   data_box_id: string | null
   data_box_type: string | null
@@ -56,6 +57,7 @@ export const SCHOOL_KINDS: KindDef[] = [
   { code: 'A00', label: 'Mateřská',  color: '#f59e0b' },
   { code: 'B00', label: 'Základní',  color: '#60a5fa' },
   { code: 'C',   label: 'Střední',   color: '#a78bfa' },
+  { code: 'GYM', label: 'Gymnázium', color: '#06b6d4' },
   { code: 'E00', label: 'VOŠ',       color: '#34d399' },
   { code: 'F',   label: 'ZUŠ',       color: '#fb923c' },
   { code: 'J',   label: 'Speciální', color: '#f472b6' },

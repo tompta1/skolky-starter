@@ -178,3 +178,52 @@ def test_nearby_missing_lat_returns_422():
 def test_nearby_out_of_range_lat_returns_422():
     r = client.get("/api/schools/nearby?lat=91&lon=14")
     assert r.status_code == 422
+
+
+# ── New edge-case tests ────────────────────────────────────
+
+def test_map_email_field_present():
+    r = client.get("/api/schools/map?kinds=A00")
+    items = r.json()["items"]
+    assert all("email" in i for i in items[:50])
+
+
+def test_nearby_email_field_present():
+    r = client.get(f"/api/schools/nearby?lat={PRAGUE_LAT}&lon={PRAGUE_LON}&limit=5")
+    assert r.status_code == 200
+    for item in r.json()["items"]:
+        assert "email" in item
+
+
+def test_map_empty_kinds_param_returns_all():
+    r_none = client.get("/api/schools/map")
+    r_empty = client.get("/api/schools/map?kinds=")
+    assert r_empty.json()["total"] == r_none.json()["total"]
+
+
+def test_map_unknown_kind_returns_empty():
+    r = client.get("/api/schools/map?kinds=ZZZZZ")
+    assert r.status_code == 200
+    assert r.json()["total"] == 0
+
+
+def test_nearby_missing_lon_returns_422():
+    r = client.get("/api/schools/nearby?lat=50")
+    assert r.status_code == 422
+
+
+def test_nearby_out_of_range_lon_returns_422():
+    r = client.get("/api/schools/nearby?lat=50&lon=181")
+    assert r.status_code == 422
+
+
+def test_nearby_limit_1_returns_one_item():
+    r = client.get(f"/api/schools/nearby?lat={PRAGUE_LAT}&lon={PRAGUE_LON}&limit=1")
+    assert r.status_code == 200
+    assert len(r.json()["items"]) == 1
+
+
+def test_nearby_limit_50_returns_at_most_fifty():
+    r = client.get(f"/api/schools/nearby?lat={PRAGUE_LAT}&lon={PRAGUE_LON}&limit=50")
+    assert r.status_code == 200
+    assert len(r.json()["items"]) <= 50

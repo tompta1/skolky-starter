@@ -18,6 +18,19 @@ export async function fetchNearby(
   return response.json()
 }
 
+export async function fetchEnrich(
+  external_keys: string[],
+): Promise<Record<string, string>> {
+  const response = await fetch(`${API_BASE}/api/schools/enrich`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(external_keys),
+  })
+  if (!response.ok) return {}
+  const data = await response.json()
+  return data.updates ?? {}
+}
+
 export async function fetchMapSchools(kinds?: string[]): Promise<MapResponse> {
   const params = new URLSearchParams()
   if (kinds && kinds.length > 0) params.set('kinds', kinds.join(','))

@@ -21,6 +21,7 @@ export function toGeoJSON(schools: MapSchool[]): GeoJSON.FeatureCollection {
         a:  s.address ?? '',
         ds: s.data_box_id ?? '',
         w:  s.website ?? '',
+        em: s.email ?? '',
       },
     })),
   }

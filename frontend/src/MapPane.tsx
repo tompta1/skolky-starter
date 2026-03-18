@@ -137,9 +137,10 @@ const MapPane = forwardRef<MapHandle, Props>(function MapPane(
         if (!p) return
         map.getCanvas().style.cursor = 'pointer'
         const ds  = p.ds ? `<div class="mp-ds">📦 ${p.ds}</div>` : ''
+        const em  = p.em ? `<div class="mp-ds"><a href="mailto:${p.em}">${p.em}</a></div>` : ''
         const web = p.w  ? `<div class="mp-web"><a href="${p.w}" target="_blank">${p.w.replace(/^https?:\/\//, '')}</a></div>` : ''
         popup.setLngLat(e.lngLat)
-          .setHTML(`<div class="mp"><strong>${p.n}</strong><div class="mp-addr">${p.a}</div>${ds}${web}</div>`)
+          .setHTML(`<div class="mp"><strong>${p.n}</strong><div class="mp-addr">${p.a}</div>${ds}${em}${web}</div>`)
           .addTo(map)
       }
       const hidePopup = () => { map.getCanvas().style.cursor = ''; popup.remove() }
