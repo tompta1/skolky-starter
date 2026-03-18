@@ -1,7 +1,9 @@
-import sys
 import os
+import sys
 
-# Make the repo root importable so `from backend.app.main import app` works
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+# Add repo root to path so `backend` is importable as a package
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from backend.app.main import app  # noqa: F401, E402 — re-exported as the Vercel ASGI handler
+from backend.app.main import app  # noqa: E402 — app is the ASGI entry point Vercel serves
+
+__all__ = ["app"]
