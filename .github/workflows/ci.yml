@@ -29,6 +29,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ariga/setup-atlas@v0
+      - run: atlas migrate hash --dir "file://backend/migrations"
+        working-directory: .
       - run: atlas migrate apply --env local
         working-directory: .
         env:
