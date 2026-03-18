@@ -421,11 +421,17 @@ def load_db() -> None:
         if isinstance(row.get("raw_source"), dict):
             row["raw_source"] = json.dumps(row["raw_source"], ensure_ascii=False)
 
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            cur.executemany(UPSERT_SQL, prepared)
-        conn.commit()
-    print(f"Upserted {len(prepared)} kindergarten workplaces into Postgres")
+    batch_size = 500
+    upserted = 0
+    for i in range(0, len(prepared), batch_size):
+        batch = prepared[i : i + batch_size]
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.executemany(UPSERT_SQL, batch)
+            conn.commit()
+        upserted += len(batch)
+        print(f"  upserted {upserted}/{len(prepared)}")
+    print(f"Upserted {upserted} school workplaces into Postgres")
 
 
 def main() -> None:
