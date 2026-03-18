@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+# venv created directly inside backend/
+backend/bin/
+backend/lib/
+backend/lib64
+backend/include/
+backend/share/
+backend/pyvenv.cfg
+
+# Node
+node_modules/
+dist/
+
+# Vite local env
+frontend/.env.local
+frontend/.env.*.local
+
+# Local data
+backend/data/
+backend/.env
+
+# Vercel
+.vercel/
+
+# OS
+.DS_Store

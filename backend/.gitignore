@@ -1,0 +1,13 @@
+# Venv (created directly in this directory by python -m venv .)
+bin/
+lib/
+lib64
+include/
+share/
+pyvenv.cfg
+
+# Runtime
+__pycache__/
+*.pyc
+.env
+data/

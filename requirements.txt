@@ -1,0 +1,5 @@
+# Runtime deps for the Vercel Python serverless function (api/index.py).
+# pyproj is omitted — it's only needed for the ETL, which runs locally.
+fastapi==0.115.12
+psycopg[binary]==3.2.6
+requests==2.32.3
