@@ -260,8 +260,9 @@ def nearby_schools(
 def enrich_schools(
     external_keys: Annotated[list[str], Body()],
 ) -> dict[str, Any]:
-    """ARES-enrich up to 20 schools that have no website yet. Persists results."""
-    keys = list(dict.fromkeys(external_keys))[:20]  # dedup, cap
+    """ARES-enrich up to 5 schools that have no website yet. Persists each result
+    immediately so a Vercel timeout cannot roll back already-completed lookups."""
+    keys = list(dict.fromkeys(external_keys))[:5]  # dedup, cap — fits Vercel 10 s limit
     if not keys:
         return {"updates": {}}
 
@@ -290,7 +291,7 @@ def enrich_schools(
 
         updates: dict[str, str] = {}
         for ico, school_keys in ico_to_keys.items():
-            website = fetch_website_for_ico(ico)
+            website = fetch_website_for_ico(ico, timeout=5)  # short timeout for serverless
             with conn.cursor() as cur:
                 cur.execute(
                     """
@@ -302,9 +303,9 @@ def enrich_schools(
                     """,
                     (website, ico),
                 )
+            conn.commit()  # commit immediately — survives a mid-batch timeout
             if website:
                 for key in school_keys:
                     updates[key] = website
-        conn.commit()
 
     return {"updates": updates}

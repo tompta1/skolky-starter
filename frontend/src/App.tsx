@@ -49,7 +49,7 @@ export default function App() {
     enrichTimerRef.current = setTimeout(() => {
       const candidates = visibleSchools
         .filter(s => !s.website && !enrichedKeysRef.current.has(s.external_key))
-        .slice(0, 20)
+        .slice(0, 5)
         .map(s => s.external_key)
       if (candidates.length === 0) return
       candidates.forEach(k => enrichedKeysRef.current.add(k))

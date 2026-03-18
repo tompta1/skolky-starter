@@ -6,8 +6,10 @@ Requires the ETL to have been run at least once:
 Run:  pytest tests/test_api.py -v
 """
 import pytest
+from unittest.mock import patch
 from fastapi.testclient import TestClient
 
+from app.db import get_conn
 from app.main import app
 
 client = TestClient(app, raise_server_exceptions=True)
@@ -227,3 +229,167 @@ def test_nearby_limit_50_returns_at_most_fifty():
     r = client.get(f"/api/schools/nearby?lat={PRAGUE_LAT}&lon={PRAGUE_LON}&limit=50")
     assert r.status_code == 200
     assert len(r.json()["items"]) <= 50
+
+
+# ── /api/schools/enrich ───────────────────────────────────
+
+def test_enrich_empty_body_returns_empty():
+    r = client.post("/api/schools/enrich", json=[])
+    assert r.status_code == 200
+    assert r.json() == {"updates": {}}
+
+
+def test_enrich_unknown_keys_returns_empty():
+    r = client.post("/api/schools/enrich", json=["nonexistent-key-xyz-000"])
+    assert r.status_code == 200
+    assert r.json()["updates"] == {}
+
+
+def test_enrich_already_checked_schools_are_skipped():
+    """Schools that were already checked (website_checked_at IS NOT NULL) must be ignored."""
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "select external_key from school_places "
+                "where website_checked_at is not null limit 3"
+            )
+            rows = cur.fetchall()
+    if not rows:
+        pytest.skip("No checked schools in DB")
+    keys = [r["external_key"] for r in rows]
+    r = client.post("/api/schools/enrich", json=keys)
+    assert r.status_code == 200
+    assert r.json()["updates"] == {}
+
+
+def test_enrich_persists_website_to_db():
+    """When ARES returns a URL the endpoint must write it to the DB immediately."""
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "select external_key, entity_ico from school_places "
+                "where website is null and website_checked_at is null "
+                "and entity_ico is not null limit 1"
+            )
+            row = cur.fetchone()
+    if not row:
+        pytest.skip("No unchecked schools in DB")
+
+    key = row["external_key"]
+    ico = row["entity_ico"]
+    test_url = "https://test-persistence.example.cz"
+
+    try:
+        with patch("app.main.fetch_website_for_ico", return_value=test_url):
+            r = client.post("/api/schools/enrich", json=[key])
+
+        assert r.status_code == 200
+        assert r.json()["updates"].get(key) == test_url
+
+        # Verify the DB row was actually committed
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "select website, website_checked_at from school_places "
+                    "where external_key = %s",
+                    (key,),
+                )
+                db_row = cur.fetchone()
+        assert db_row["website"] == test_url
+        assert db_row["website_checked_at"] is not None
+    finally:
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "update school_places "
+                    "set website = null, website_checked_at = null, updated_at = now() "
+                    "where external_key = %s",
+                    (key,),
+                )
+            conn.commit()
+
+
+def test_enrich_marks_checked_even_when_ares_finds_nothing():
+    """website_checked_at must be set even if ARES returns None, so the school is not re-checked."""
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "select external_key from school_places "
+                "where website is null and website_checked_at is null "
+                "and entity_ico is not null limit 1"
+            )
+            row = cur.fetchone()
+    if not row:
+        pytest.skip("No unchecked schools in DB")
+
+    key = row["external_key"]
+
+    try:
+        with patch("app.main.fetch_website_for_ico", return_value=None):
+            r = client.post("/api/schools/enrich", json=[key])
+
+        assert r.status_code == 200
+        assert r.json()["updates"] == {}  # no website found
+
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "select website, website_checked_at from school_places "
+                    "where external_key = %s",
+                    (key,),
+                )
+                db_row = cur.fetchone()
+        assert db_row["website"] is None
+        assert db_row["website_checked_at"] is not None  # must be stamped
+    finally:
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "update school_places "
+                    "set website_checked_at = null, updated_at = now() "
+                    "where external_key = %s",
+                    (key,),
+                )
+            conn.commit()
+
+
+def test_enrich_deduplicates_by_ico():
+    """Two external_keys with the same entity_ico must trigger exactly one ARES call."""
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "select entity_ico, array_agg(external_key) as keys "
+                "from school_places "
+                "where website is null and website_checked_at is null and entity_ico is not null "
+                "group by entity_ico having count(*) >= 2 limit 1"
+            )
+            row = cur.fetchone()
+    if not row:
+        pytest.skip("No entity with multiple unchecked school places")
+
+    keys = row["keys"][:2]
+    test_url = "https://test-dedup.example.cz"
+    call_count = []
+
+    def counting_fetch(ico, **_):
+        call_count.append(ico)
+        return test_url
+
+    try:
+        with patch("app.main.fetch_website_for_ico", side_effect=counting_fetch):
+            r = client.post("/api/schools/enrich", json=keys)
+
+        assert r.status_code == 200
+        assert len(call_count) == 1, f"Expected 1 ARES call, got {len(call_count)}"
+        for key in keys:
+            assert r.json()["updates"].get(key) == test_url
+    finally:
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "update school_places "
+                    "set website = null, website_checked_at = null, updated_at = now() "
+                    "where external_key = any(%s)",
+                    (keys,),
+                )
+            conn.commit()
