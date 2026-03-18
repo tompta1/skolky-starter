@@ -34,7 +34,7 @@ describe('toGeoJSON', () => {
 
   it('uses [lon, lat] coordinate order', () => {
     const gj = toGeoJSON([school({ lat: 50.07, lon: 14.43 })])
-    const coords = gj.features[0].geometry.coordinates
+    const coords = (gj.features[0].geometry as GeoJSON.Point).coordinates
     expect(coords[0]).toBe(14.43)   // lon first
     expect(coords[1]).toBe(50.07)   // lat second
   })
@@ -76,12 +76,10 @@ describe('toGeoJSON', () => {
 describe('buildKindFilter', () => {
   it('returns always-false expression for empty set', () => {
     const f = buildKindFilter(new Set())
-    // must be an expression (array), not a boolean
     expect(Array.isArray(f)).toBe(true)
-    // [==, 0, 1] should evaluate to false
-    expect(f[0]).toBe('==')
-    expect(f[1]).toBe(0)
-    expect(f[2]).toBe(1)
+    // implementation uses ['boolean', false] — a valid MapLibre always-false filter
+    expect(f[0]).toBe('boolean')
+    expect(f[1]).toBe(false)
   })
 
   it('returns a single equality check for one-element set', () => {
@@ -115,8 +113,8 @@ describe('buildKindFilter', () => {
 describe('buildHlFilter', () => {
   it('returns always-false for empty set', () => {
     const f = buildHlFilter(new Set())
-    expect(f[0]).toBe('==')
-    expect(f[1]).toBe(0)
+    expect(f[0]).toBe('boolean')
+    expect(f[1]).toBe(false)
   })
 
   it('returns equality check for one key', () => {
