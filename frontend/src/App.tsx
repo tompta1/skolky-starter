@@ -204,9 +204,7 @@ export default function App() {
           ref={mapRef}
           schools={allSchools}
           activeKinds={activeKinds}
-          highlighted={new Set()}
-          userLocation={null}
-          onBoundsChange={handleBoundsChange}
+onBoundsChange={handleBoundsChange}
           onSchoolClick={handleSchoolClick}
         />
       </main>

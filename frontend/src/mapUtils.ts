@@ -39,12 +39,6 @@ export function buildKindFilter(activeKinds: Set<string>): FilterExpr {
   return checks.length === 1 ? checks[0] : ['any', ...checks]
 }
 
-export function buildHlFilter(keys: Set<string>): FilterExpr {
-  if (keys.size === 0) return ['boolean', false]
-  const checks = Array.from(keys).map(k => ['==', ['get', 'k'], k])
-  return checks.length === 1 ? checks[0] : ['any', ...checks]
-}
-
 // ── Czech Republic bbox (generous) ──────────────────────
 export const CZ_BBOX = { minLat: 48.5, maxLat: 51.2, minLon: 12.0, maxLon: 18.9 }
 

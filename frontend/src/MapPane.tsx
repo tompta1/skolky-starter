@@ -15,15 +15,14 @@ import {
   useRef,
   useState,
 } from 'react'
-import { buildHlFilter, buildKindFilter, toGeoJSON } from './mapUtils'
+import { buildKindFilter, toGeoJSON } from './mapUtils'
 import type { MapSchool } from './types'
 
 // CartoDB Dark Matter — free, no API key, OSM Shortbread vector tiles
 const DARK_STYLE = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json'
 
-const SRC    = 'schools'
-const LYR    = 'sch-base'
-const LYR_HL = 'sch-hl'
+const SRC = 'schools'
+const LYR = 'sch-base'
 
 export type MapHandle = {
   flyTo: (lat: number, lon: number, zoom?: number) => void
@@ -32,19 +31,16 @@ export type MapHandle = {
 type Props = {
   schools: MapSchool[]
   activeKinds: Set<string>
-  highlighted: Set<string>
-  userLocation: [number, number] | null
   onBoundsChange: (w: number, s: number, e: number, n: number) => void
   onSchoolClick: (key: string) => void
 }
 
 const MapPane = forwardRef<MapHandle, Props>(function MapPane(
-  { schools, activeKinds, highlighted, userLocation, onBoundsChange, onSchoolClick },
+  { schools, activeKinds, onBoundsChange, onSchoolClick },
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const mapRef       = useRef<maplibregl.Map | null>(null)
-  const pinRef       = useRef<maplibregl.Marker | null>(null)
+  const mapRef = useRef<maplibregl.Map | null>(null)
 
   // `ready` flips true once the correct map instance has its source + layers set up.
   // We need a state (not just a ref) so that dependent effects re-run.
@@ -110,21 +106,6 @@ const MapPane = forwardRef<MapHandle, Props>(function MapPane(
         },
       })
 
-      // Highlighted circles — nearby results, always on top
-      map.addLayer({
-        id: LYR_HL,
-        type: 'circle',
-        source: SRC,
-        filter: ['boolean', false],
-        paint: {
-          'circle-color': ['get', 'c'],
-          'circle-radius': 10,
-          'circle-opacity': 1,
-          'circle-stroke-width': 2.5,
-          'circle-stroke-color': '#ffffff',
-        },
-      })
-
       // Hover popup
       const popup = new maplibregl.Popup({
         closeButton: false,
@@ -145,15 +126,13 @@ const MapPane = forwardRef<MapHandle, Props>(function MapPane(
       }
       const hidePopup = () => { map.getCanvas().style.cursor = ''; popup.remove() }
 
-      for (const lyr of [LYR, LYR_HL]) {
-        map.on('mouseenter', lyr, showPopup)
-        map.on('mousemove',  lyr, e => popup.setLngLat(e.lngLat))
-        map.on('mouseleave', lyr, hidePopup)
-        map.on('click',      lyr, e => {
-          const key = e.features?.[0]?.properties?.k
-          if (key) clickRef.current(String(key))
-        })
-      }
+      map.on('mouseenter', LYR, showPopup)
+      map.on('mousemove',  LYR, e => popup.setLngLat(e.lngLat))
+      map.on('mouseleave', LYR, hidePopup)
+      map.on('click',      LYR, e => {
+        const key = e.features?.[0]?.properties?.k
+        if (key) clickRef.current(String(key))
+      })
 
       // Report bounds whenever viewport changes
       const report = () => {
@@ -188,23 +167,6 @@ const MapPane = forwardRef<MapHandle, Props>(function MapPane(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mapRef.current.setFilter(LYR, buildKindFilter(activeKinds) as any)
   }, [activeKinds, ready])
-
-  // ── Sync highlighted filter ───────────────────────────
-  useEffect(() => {
-    if (!ready || !mapRef.current) return
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    mapRef.current.setFilter(LYR_HL, buildHlFilter(highlighted) as any)
-  }, [highlighted, ready])
-
-  // ── User location pin ─────────────────────────────────
-  useEffect(() => {
-    if (!mapRef.current || !userLocation) return
-    pinRef.current?.remove()
-    pinRef.current = new maplibregl.Marker({ color: '#ef4444' })
-      .setLngLat([userLocation[1], userLocation[0]])
-      .addTo(mapRef.current)
-    mapRef.current.flyTo({ center: [userLocation[1], userLocation[0]], zoom: 13, duration: 1000 })
-  }, [userLocation])
 
   return <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
 })

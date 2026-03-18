@@ -45,7 +45,6 @@ describe('MapPane – MapLibre worker URL setup', () => {
     // Stub mapUtils / types so MapPane doesn't pull in more side-effects.
     vi.doMock('../mapUtils', () => ({
       buildKindFilter: vi.fn(),
-      buildHlFilter: vi.fn(),
       toGeoJSON: vi.fn(),
     }))
 
@@ -78,7 +77,6 @@ describe('MapPane – MapLibre worker URL setup', () => {
 
     vi.doMock('../mapUtils', () => ({
       buildKindFilter: vi.fn(),
-      buildHlFilter: vi.fn(),
       toGeoJSON: vi.fn(),
     }))
 

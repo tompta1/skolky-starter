@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildHlFilter, buildKindFilter, isInCzechia, toGeoJSON } from '../mapUtils'
+import { buildKindFilter, isInCzechia, toGeoJSON } from '../mapUtils'
 import { kindGroup, type MapSchool } from '../types'
 
 function school(overrides: Partial<MapSchool> = {}): MapSchool {
@@ -105,32 +105,6 @@ describe('buildKindFilter', () => {
     const f = buildKindFilter(kinds) as unknown[][]
     const codeValues = (f.slice(1) as unknown[][]).map(c => c[2])
     expect(codeValues.sort()).toEqual([...kinds].sort())
-  })
-})
-
-// ── buildHlFilter ─────────────────────────────────────────
-
-describe('buildHlFilter', () => {
-  it('returns always-false for empty set', () => {
-    const f = buildHlFilter(new Set())
-    expect(f[0]).toBe('boolean')
-    expect(f[1]).toBe(false)
-  })
-
-  it('returns equality check for one key', () => {
-    const f = buildHlFilter(new Set(['abc:def:1']))
-    expect(f[0]).toBe('==')
-    expect(f[2]).toBe('abc:def:1')
-  })
-
-  it('returns any expression for multiple keys', () => {
-    const f = buildHlFilter(new Set(['k1', 'k2', 'k3']))
-    expect(f[0]).toBe('any')
-    const checks = (f as unknown[]).slice(1) as unknown[][]
-    expect(checks).toHaveLength(3)
-    for (const check of checks) {
-      expect(check[1]).toEqual(['get', 'k'])
-    }
   })
 })
 

@@ -25,6 +25,16 @@ backend/.env
 # Vercel
 .vercel/
 
+# TypeScript / Vite build artifacts
+frontend/tsconfig.app.tsbuildinfo
+frontend/tsconfig.node.tsbuildinfo
+frontend/vite.config.d.ts
+frontend/vite.config.js
+
+# Claude Code tool files
+backend/.claude/
+backend/skills-lock.json
+
 # OS
 .DS_Store
 .vercel
