@@ -3,6 +3,7 @@ env "local" {
   url = getenv("DATABASE_URL")
   dev = "docker://postgres/16/dev"
   migration {
-    dir = "file://backend/migrations"
+    dir             = "file://backend/migrations"
+    revisions_schema = "public"
   }
 }
